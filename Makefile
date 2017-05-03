@@ -10,10 +10,10 @@ OBJ = main.o pedrolio.o
 control: $(OBJ) mod_control/mod_control.o
 	gcc -o $@ $^ $(CFLAGS) $(LIBS)
 
-grupo11: $(OBJ) mod_grupo11/mod_grupo11.o
+grupo11: $(OBJ) mod_grupo11/grupo11_control.o
 	gcc -o $@ $^ $(CFLAGS) $(LIBS)
 
-all: control
+all: control grupo11
 
 PHONY: clean
 
