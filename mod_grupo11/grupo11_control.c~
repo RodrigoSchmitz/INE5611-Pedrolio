@@ -21,6 +21,30 @@ pthread_mutex_t ctrlRocks;
 pthread_cond_t hasRocks;
 pthread_cond_t hasSpace;
 
+static void* worker(void* ignored)
+{
+    while (cancelled == 0)
+    {
+        rock_t rock = takeRock();
+
+        oil_t oil = pd_process(rock);
+
+        pthread_mutex_lock(&deliver);
+        pd_deliver(oil);
+        pthread_mutex_unlock(&deliver);
+    }
+    return NULL;
+}
+
+static void* readRock(void* ignored)
+{
+    while(cancelled == 0)
+    {
+        rock_t rock = pd_read();
+        storeRock(rock);
+    }
+}
+
 rock_t takeRock()
 {
     pthread_mutex_lock(&ctrlRocks);
@@ -50,30 +74,6 @@ void storeRock(rock_t rock)
     contador++;
     pthread_mutex_unlock(&ctrlRocks);
     pthread_cond_signal(&hasRocks);
-}
-
-static void* worker(void* ignored)
-{
-    while (cancelled == 0)
-    {
-        rock_t rock = takeRock();
-
-        oil_t oil = pd_process(rock);
-
-        pthread_mutex_lock(&deliver);
-        pd_deliver(oil);
-        pthread_mutex_unlock(&deliver);
-    }
-    return NULL;
-}
-
-static void* readRock(void* ignored)
-{
-    while(cancelled == 0)
-    {
-        rock_t rock = pd_read();
-        storeRock(rock);
-    }
 }
 
 void mod_setup()
