@@ -4,92 +4,96 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <semaphore.h>
-#define ROCKSSIZE 8
+
 /**
 * Alunos: Hiago Medeiros e Rodrigo Schmitz
 **/
-pthread_t threads[PROCESSORS_COUNT];
-pthread_t reader;
-int rocks[ROCKSSIZE];
-int cancelled;
-int setup = 0;
-int i, f, contador;
 
+pthread_t threads[PROCESSORS_COUNT], reader;
 
-pthread_mutex_t deliver;
-pthread_mutex_t ctrlRocks;
-pthread_cond_t hasRocks;
-pthread_cond_t hasSpace;
+int rocks[PROCESSORS_COUNT];
+int cancelled, i, f, contador, setup = 0;
 
-rock_t takeRock()
+pthread_mutex_t transportar;
+pthread_mutex_t controlar_pedras;
+pthread_cond_t tem_pedras;
+pthread_cond_t tem_espaco;
+
+rock_t pegarPedra()
 {
-    pthread_mutex_lock(&ctrlRocks);
+    pthread_mutex_lock(&controlar_pedras);
+
     while(contador == 0)
     {
-        pthread_cond_wait(&hasRocks, &ctrlRocks);
+        pthread_cond_wait(&tem_pedras, &controlar_pedras);
     }
-    i = (i+1)%ROCKSSIZE;
+
+    i = ( i + 1 ) % PROCESSORS_COUNT;
     rock_t rock = rocks[i];
     contador--;
-    pthread_mutex_unlock(&ctrlRocks);
-    pthread_cond_signal(&hasSpace);
-    return rock;
 
+    pthread_mutex_unlock(&controlar_pedras);
+    pthread_cond_signal(&tem_espaco);
+
+    return rock;
 }
 
-void storeRock(rock_t rock)
+void guardarPedra(rock_t rock)
 {
+    pthread_mutex_lock(&controlar_pedras);
 
-    pthread_mutex_lock(&ctrlRocks);
-    while(contador == ROCKSSIZE)
+    while(contador == PROCESSORS_COUNT)
     {
-        pthread_cond_wait(&hasSpace, &ctrlRocks);       
+        pthread_cond_wait(&tem_espaco, &controlar_pedras);
     }
-    f = (f+1)%ROCKSSIZE;
+
+    f = ( f + 1 ) % PROCESSORS_COUNT;
     rocks[f] = rock;
     contador++;
-    pthread_mutex_unlock(&ctrlRocks);
-    pthread_cond_signal(&hasRocks);
+
+    pthread_mutex_unlock(&controlar_pedras);
+    pthread_cond_signal(&tem_pedras);
 }
 
 static void* worker(void* ignored)
 {
     while (cancelled == 0)
     {
-        rock_t rock = takeRock();
+        rock_t rock = pegarPedra();
 
         oil_t oil = pd_process(rock);
 
-        pthread_mutex_lock(&deliver);
+        pthread_mutex_lock(&transportar);
         pd_deliver(oil);
-        pthread_mutex_unlock(&deliver);
+        pthread_mutex_unlock(&transportar);
     }
+
     return NULL;
 }
 
-static void* readRock(void* ignored)
+static void* lerPedras(void* ignored)
 {
     while(cancelled == 0)
     {
         rock_t rock = pd_read();
-        storeRock(rock);
+        guardarPedra(rock);
     }
 }
 
 void mod_setup()
 {
-
     assert(setup == 0);
     setup = 1;
     cancelled = 0;
     i = 0;
     f = 0;
     contador = 0;
-    pthread_mutex_init(&deliver, NULL);
-    pthread_mutex_init(&ctrlRocks, NULL);
-    pthread_cond_init(&hasRocks, NULL);
-    pthread_cond_init(&hasSpace, NULL);
-    pthread_create(&reader, NULL, readRock, NULL);
+
+    pthread_mutex_init(&transportar, NULL);
+    pthread_mutex_init(&controlar_pedras, NULL);
+    pthread_cond_init(&tem_pedras, NULL);
+    pthread_cond_init(&tem_espaco, NULL);
+    pthread_create(&reader, NULL, lerPedras, NULL);
 
     int i;
     for(i = 0; i < PROCESSORS_COUNT; i++)
@@ -116,9 +120,9 @@ void mod_shutdown()
     }
 
     pthread_join(reader, NULL);
-    pthread_mutex_destroy(&deliver);
-    pthread_mutex_destroy(&ctrlRocks);
-    pthread_cond_destroy(&hasRocks);
-    pthread_cond_destroy(&hasSpace);
+    pthread_mutex_destroy(&transportar);
+    pthread_mutex_destroy(&controlar_pedras);
+    pthread_cond_destroy(&tem_pedras);
+    pthread_cond_destroy(&tem_espaco);
 
 }
